@@ -41,9 +41,9 @@ public class EClientSocket extends EClient implements EClientMsgSink  {
 	    @Override
         public void run(){
             while(this.socket.isConnected()){
-                m_signal.waitForSignal();
+                this.socket.m_signal.waitForSignal();
                 try {
-                    if (this.socket.isConnected()) m_reader.processMsgs();
+                    if (this.socket.isConnected()) this.socket.m_reader.processMsgs();
                 } catch (IOException e) {
                     System.err.println("IO Exception in message processing thread");
                     e.printStackTrace();
@@ -67,7 +67,7 @@ public class EClientSocket extends EClient implements EClientMsgSink  {
     public EClientSocket(EWrapper eWrapper) {
         super(eWrapper);
         shouldManageReader = true;
-        this.messageProcessingThread = new MessageProcessingThread(this);
+        //this.messageProcessingThread = new MessageProcessingThread(this);
     }
 
 	@Override
@@ -92,32 +92,36 @@ public class EClientSocket extends EClient implements EClientMsgSink  {
 
 	protected synchronized void eConnect(Socket socket) throws IOException {
 	    // create io streams
-	    m_socketTransport = new ESocket(socket);
-	    m_dis = new DataInputStream(socket.getInputStream());
-	    m_defaultPort = socket.getPort();
-	    m_socket = socket;
+	    this.m_socketTransport = new ESocket(socket);
+	    this.m_dis             = new DataInputStream(socket.getInputStream());
+	    this.m_defaultPort     = socket.getPort();
+	    this.m_socket          = socket;
 	
 	    sendConnectRequest();
 	
 	    // init reader
-	    m_reader = new EReader(this);
+	    this.m_reader = new EReader(this);
 	
 	    if (!m_asyncEConnect) {
-	    	m_reader.putMessageToQueue();
+	    	this.m_reader.putMessageToQueue();
 
 	    	while (m_serverVersion == 0) {
-	    		m_signal.waitForSignal();
-	    		m_reader.processMsgs();
+	    		this.m_signal.waitForSignal();
+	    		this.m_reader.processMsgs();
 	    	}       
 	    }
 
+	    // check if need to manage the reader thread
         if (shouldManageReader){
 
+	    	// create new thread for message processing
+			this.messageProcessingThread = new MessageProcessingThread(this);
+
             // start the reader thread (i.e. reading data from TWS socket)
-            m_reader.start();
+            this.m_reader.start();
 
             // start the message processing thread
-            messageProcessingThread.start();
+            this.messageProcessingThread.start();
         }
 	}
 
@@ -255,9 +259,6 @@ public class EClientSocket extends EClient implements EClientMsgSink  {
 	        m_TwsTime = "";
 	        m_redirectCount = 0;
 	    }
-
-	    // clean up message processing thread
-	    this.messageProcessingThread.interrupt();
 	
 	    FilterInputStream dis = m_dis;
 	    m_dis = null;
@@ -275,6 +276,9 @@ public class EClientSocket extends EClient implements EClientMsgSink  {
 	        	dis.close();
 	    } catch (Exception ignored) {
 	    }
+
+		// clean up message processing thread
+		this.messageProcessingThread.interrupt();
 	}
 
 	public int read(byte[] buf, int off, int len) throws IOException {

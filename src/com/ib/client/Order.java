@@ -40,7 +40,7 @@ public class Order {
 
     // primary attributes
     private String      m_action = "BUY";
-    private double         m_totalQuantity;
+    private double      m_totalQuantity;
     private int         m_displaySize;
     private String      m_orderType = "LMT";
     private double      m_lmtPrice = Double.MAX_VALUE;

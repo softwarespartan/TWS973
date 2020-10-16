@@ -79,6 +79,20 @@ public class Handler extends EmptyWrapper{
     private final Set<NotificationListener> marketRuleListeners
             = Collections.newSetFromMap(new ConcurrentHashMap<NotificationListener,Boolean>());
 
+    private final Set<NotificationListener> headTimestampListeners
+            = Collections.newSetFromMap(new ConcurrentHashMap<NotificationListener,Boolean>());
+
+    private final Set<NotificationListener> financialAdvisoryListeners
+            = Collections.newSetFromMap(new ConcurrentHashMap<NotificationListener, Boolean>());
+
+    private final Set<NotificationListener> fundamentalDataListeners
+            = Collections.newSetFromMap(new ConcurrentHashMap<NotificationListener, Boolean>());
+
+    private final Set<NotificationListener> symbolSampleListeners
+            = Collections.newSetFromMap(new ConcurrentHashMap<NotificationListener, Boolean>());
+
+    private final Set<NotificationListener> tickByTickListeners
+            = Collections.newSetFromMap(new ConcurrentHashMap<NotificationListener, Boolean>());
 
 
     private final ConcurrentHashMap<Integer,HistoricalDataEvent>  historicalDataMap = new ConcurrentHashMap<>();
@@ -356,8 +370,64 @@ public class Handler extends EmptyWrapper{
     }
 
 
+    public void addHeadTimestampListener       (NotificationListener listener) {
+        System.out.println("headtimestamp listener has been added");
+        this.headTimestampListeners.add(listener);
+    }
 
-    public TWSEvent getEvent(UUID uuid){ return this.eventQueue.get(uuid); }
+    public void removeHeadTimestampListener    (NotificationListener listener) {
+        System.out.println("headtimestamp listener has been removed");
+        this.headTimestampListeners.remove(listener);
+    }
+
+
+    public void addFinancialAdvisoryListener    (NotificationListener listener) {
+        System.out.println("financial advisory listener has been added");
+        this.financialAdvisoryListeners.add(listener);
+    }
+
+    public void removeFinancialAdvisoryListener    (NotificationListener listener) {
+        System.out.println("financial advisory listener has been removed");
+        this.financialAdvisoryListeners.remove(listener);
+    }
+
+
+    public void addFundamentalListener    (NotificationListener listener) {
+        System.out.println("fundamental data listener has been added");
+        this.fundamentalDataListeners.add(listener);
+    }
+
+    public void removeFundamentalListener    (NotificationListener listener) {
+        System.out.println("fundamental data listener has been removed");
+        this.fundamentalDataListeners.remove(listener);
+    }
+
+
+    public void addSymbolSampleListener    (NotificationListener listener) {
+        System.out.println("symbol sample listener has been added");
+        this.symbolSampleListeners.add(listener);
+    }
+
+    public void removeSymbolSampleListener    (NotificationListener listener) {
+        System.out.println("symbol sample listener has been removed");
+        this.symbolSampleListeners.remove(listener);
+    }
+
+
+
+    public void addTickByTickListener    (NotificationListener listener) {
+        System.out.println("tick by tick listener has been added");
+        this.tickByTickListeners.add(listener);
+    }
+
+    public void removeTickByTickListener    (NotificationListener listener) {
+        System.out.println("tick by tick listener has been removed");
+        this.tickByTickListeners.remove(listener);
+    }
+
+
+    public TWSEvent getEvent          (UUID uuid) { return this.eventQueue.get(uuid);    }
+    public TWSEvent getEventWithRemove(UUID uuid) { return this.eventQueue.remove(uuid); }
 
 
 
@@ -541,7 +611,10 @@ public class Handler extends EmptyWrapper{
     }
 
     @Override
-    public void positionEnd()                                                           {
+    public void positionEnd(){
+
+        // if no positions key=0 never gets created
+        if (!this.positionMap.containsKey(0)) return;
 
         // extract positions event from the map
         PositionsEvent positionsEvent = this.positionMap.get(0);
@@ -955,5 +1028,114 @@ public class Handler extends EmptyWrapper{
     public final class MarketRuleEvent extends Event<List<PriceIncrement>>{
         public MarketRuleEvent(Object source, List<PriceIncrement> data) { super(source, data); }
     }
+
+    @Override
+    public void headTimestamp(int reqId, String headTimestamp) {
+        this.processEvent(
+                new HeadTimestampEvent(this, new com.tws.HeadTimestamp(reqId,headTimestamp)),
+                this.headTimestampListeners
+        );
+    }
+
+    public final class HeadTimestampEvent extends Event<com.tws.HeadTimestamp>{
+        public HeadTimestampEvent(Object source, com.tws.HeadTimestamp data) { super(source, data); }
+    }
+
+
+    @Override
+    public void receiveFA(int faDataType, String xml) {
+        this.processEvent(
+                new FinancialAdvisoryEvent(this, new com.tws.FinancialAdvisory(faDataType,xml)),
+                this.financialAdvisoryListeners
+        );
+    }
+
+    public final class FinancialAdvisoryEvent extends Event<com.tws.FinancialAdvisory> {
+        public FinancialAdvisoryEvent(Object source, com.tws.FinancialAdvisory data) {
+            super(source, data);
+        }
+
+    }
+
+    @Override
+    public void fundamentalData(int reqId, String data) {
+        this.processEvent(
+                new FundamentalDataEvent(this, new com.tws.FundamentalData(reqId,data)),
+                this.fundamentalDataListeners
+        );
+    }
+
+    public final class FundamentalDataEvent extends Event<com.tws.FundamentalData>{
+        public FundamentalDataEvent(Object source, com.tws.FundamentalData data) { super(source, data); }
+    }
+
+
+    @Override
+    public void symbolSamples(int reqId, ContractDescription[] contractDescriptions) {
+
+        // create new symbol sample event
+        SymbolSampleEvent sse = new SymbolSampleEvent(this, reqId);
+
+        // add contract descriptions to the data hashset
+        sse.data.addAll(Arrays.asList(contractDescriptions));
+
+        // setup done, process the event
+        this.processEvent(sse,this.symbolSampleListeners);
+    }
+
+    public final class SymbolSampleEvent extends AggregateEvent<ContractDescription>{
+        SymbolSampleEvent(Object obj, int reqId) { super(obj, reqId); }
+    }
+
+
+
+    @Override
+    public void tickByTickAllLast(int reqId, int tickType, long time, double price, int size, TickAttr attribs, String exchange, String specialConditions) {
+
+        this.processEvent(
+                new TickByTickAllLastEvent(this,
+                        new com.tws.TickByTickAllLast(
+                            reqId,tickType,time,price,size,attribs,exchange,specialConditions
+                        )
+                ),
+                this.tickByTickListeners
+        );
+    }
+
+    @Override
+    public void tickByTickBidAsk(int reqId, long time, double bidPrice, double askPrice, int bidSize, int askSize, TickAttr attribs) {
+        this.processEvent(
+                new TickByTickBidAskEvent(this,
+                        new com.tws.TickByTickBidAsk(
+                                reqId,time,bidPrice,askPrice,bidSize,askSize,attribs
+                        )
+                ),
+                this.tickByTickListeners
+        );
+    }
+
+    @Override
+    public void tickByTickMidPoint(int reqId, long time, double midPoint) {
+        this.processEvent(
+                new TickByTickMidPointEvent(this,
+                        new com.tws.TickByTickMidPoint(reqId,time,midPoint)
+                ),
+                this.tickByTickListeners
+        );
+    }
+
+    public final class TickByTickAllLastEvent extends Event<com.tws.TickByTickAllLast>{
+        public TickByTickAllLastEvent(Object source, com.tws.TickByTickAllLast data) { super(source, data); }
+    }
+
+    public final class TickByTickBidAskEvent extends Event<com.tws.TickByTickBidAsk>{
+        public TickByTickBidAskEvent(Object source, com.tws.TickByTickBidAsk data) { super(source, data); }
+    }
+
+    public final class TickByTickMidPointEvent extends Event<com.tws.TickByTickMidPoint>{
+        public TickByTickMidPointEvent(Object source, com.tws.TickByTickMidPoint data) { super(source, data); }
+    }
+
+
 
 }
