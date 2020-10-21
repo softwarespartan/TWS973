@@ -910,6 +910,9 @@ public class Handler extends EmptyWrapper{
     @Override
     public void scannerDataEnd(int reqId)                                  {
 
+        // scanner end can get called without ever having called scannerData callback so be defensive
+        if (!this.scannerDataMap.containsKey(reqId)) return;
+
         // extract the final aggregated event from the map
         ScannerDataEvent event = this.scannerDataMap.get(reqId);
 
